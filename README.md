@@ -16,7 +16,7 @@ El proceso se automatiza con `scripts/setup_selfsigned_certificate.sh`. Antes de
 - `OPENSSL_COMMON_NAME`
 - `OPENSSL_EMAIL`
 
-`OPENSSL_COMMON_NAME` debe coincidir con la direccion usada para acceder al servidor. Para esta instancia se configura como `52.207.115.209`. El script añade ese valor al campo `subjectAltName` como tipo IP; si se configura un nombre DNS, lo añade como tipo DNS. Esta extension permite comprobar la identidad del servidor, aunque al ser un certificado autofirmado el navegador seguira mostrando una advertencia de confianza. No publiques valores privados incluidos en `.env`.
+`OPENSSL_COMMON_NAME` debe coincidir con la direccion usada para acceder al servidor. Para esta instancia se configura como `54.82.187.176`. El script añade ese valor al campo `subjectAltName` como tipo IP; si se configura un nombre DNS, lo añade como tipo DNS. Esta extension permite comprobar la identidad del servidor, aunque al ser un certificado autofirmado el navegador seguira mostrando una advertencia de confianza. No publiques valores privados incluidos en `.env`.
 
 Desde la raiz del proyecto, ejecuta el script desde su directorio para que encuentre `.env` y las rutas relativas de `conf/`:
 
@@ -50,25 +50,29 @@ Tambien puedes consultar el sujeto, emisor y periodo de validez del certificado:
 sudo openssl x509 -in /etc/ssl/certs/apache-selfsigned.crt -noout -subject -issuer -dates
 ```
 
-Abre `https://52.207.115.209/` en el navegador. Al ser autofirmado, es normal que el navegador solicite confirmar una excepcion de seguridad. Para una prueba desde terminal, `curl -k` permite continuar sin validar la confianza del certificado:
+Abre `https://54.82.187.176/` en el navegador. Al ser autofirmado, es normal que el navegador solicite confirmar una excepcion de seguridad. Para una prueba desde terminal, `curl -k` permite continuar sin validar la confianza del certificado:
 
 ```bash
-curl -k -I https://52.207.115.209/
-curl -I http://52.207.115.209/
+curl -k -I https://54.82.187.176/
+curl -I http://54.82.187.176/
 ```
 
 La segunda peticion debe responder con una redireccion hacia HTTPS. No uses `-k` como solucion para un servicio publico: en produccion se debe instalar un certificado emitido por una autoridad certificadora de confianza.
 
 ## Evidencias
 
-La primera captura muestra la ejecucion del script y la activacion de la configuracion SSL en Apache:
+La primera captura muestra la instalacion de los componentes LAMP y la copia de la aplicacion al directorio web:
 
-![Ejecucion del script de certificado autofirmado](imagenes/1.png)
+![Instalacion de Apache, PHP y MySQL](imagenes/Screenshot_20261030_180036.png)
 
-La segunda captura muestra la pagina de informacion de PHP servida por Apache. La barra del navegador usa HTTP, por lo que esta imagen comprueba PHP, pero no la conexion HTTPS:
+La segunda captura muestra la ejecucion del script de certificado autofirmado y la activacion de SSL y la redireccion en Apache:
 
-![Comprobacion de PHP en Apache](imagenes/2.png)
+![Configuracion del certificado autofirmado](imagenes/Screenshot_20261030_180140.png)
 
-La tercera captura muestra los datos del certificado y la informacion de seguridad de la conexion HTTPS:
+La tercera captura comprueba que Apache sirve la pagina de informacion de PHP en la direccion del servidor:
 
-![Datos del certificado y conexion TLS](imagenes/3.png)
+![Comprobacion de PHP en el servidor](imagenes/Screenshot_20261030_180252.png)
+
+La cuarta captura muestra los datos del certificado, incluido el nombre comun y la direccion IP alternativa (`subjectAltName`):
+
+![Datos del certificado autofirmado](imagenes/Screenshot_20261030_180336.png)
