@@ -1,35 +1,41 @@
- #!/bin/bash
-
-# Configuramos el script para que se muestren los comandos
-# y finalice cuando hay un error en la ejecución
+#!/bin/bash
 set -ex
 
-# Actualiza la lista de paquetes
+# Comprobamos que el identificador del usuario efectivo es root
+if [ "$EUID" -ne 0 ]; then
+  echo "Este script debe ejecutarse con sudo"
+  exit 1
+fi
+
+# Evitamos que apt haga preguntas durante la instalación
+export DEBIAN_FRONTEND=noninteractive
+
+# Actualizamos los repositorios
 apt update
 
-# Actualizamos los paquetes del sistema operativo
-apt upgrade -y
-
-# Instalamos el servidor web Apache
+# Instalamos el servidor web apache
 apt install apache2 -y
 
-# Copiamos nuestro archivo de configuración de VirtualHost
+# Copiamos el archivo de configuración de Apache
 cp ../conf/000-default.conf /etc/apache2/sites-available
 
-# Instalamos los paquetes necesarios para tener PHP
-apt install php libapache2-mod-php php-mysql -y
-
-# Habilitamos el módulo rewrite de Apache
+# Habilitamos el módulo de reescritura de Apache
 a2enmod rewrite
 
-# Reiniciamos el servicio de Apache
+# Instalamos PHP y las extensiones necesarias
+apt install php libapache2-mod-php php-mysql -y
+
+# Reiniciamos el servicio de Apache para aplicar los cambios
 systemctl restart apache2
 
-# Copiar el archivo php/index.php a /var/www/html
+# Eliminamos la página por defecto de Apache
+rm -f /var/www/html/index.html
+
+# Copiamos el archivo index.php a la carpeta raíz del servidor web
 cp ../php/index.php /var/www/html
 
-# Modificamos el propietario del diretoro /var/www/html
+# Cambiamos el propietario y el grupo de la carpeta /var/www/html a www-data
 chown -R www-data:www-data /var/www/html
 
-# Instalamos MySQL Server
+# Instalamos MySQL
 apt install mysql-server -y

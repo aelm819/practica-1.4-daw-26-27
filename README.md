@@ -1,78 +1,70 @@
-# Practica 1.4: certificado SSL/TLS autofirmado en Apache
+# Practica 1.5: HTTPS con Let's Encrypt y Apache
 
 ## Objetivo
 
-Configurar HTTPS en Apache mediante un certificado autofirmado generado con OpenSSL. El certificado cifra la conexion entre el navegador y el servidor, pero no esta firmado por una autoridad certificadora publica; por ello, el navegador puede mostrar una advertencia de confianza.
+Configurar HTTPS en Apache con un certificado gratuito de Let's Encrypt. A diferencia de un certificado autofirmado, este certificado esta firmado por una autoridad certificadora reconocida por los navegadores, por lo que no deberia aparecer una advertencia de confianza si el dominio y el servidor estan configurados correctamente.
 
-## Generacion y configuracion
+## Requisitos previos
 
-El proceso se automatiza con `scripts/setup_selfsigned_certificate.sh`. Antes de ejecutarlo, el archivo `scripts/.env` debe definir estas variables, que se usan para construir el nombre distinguido del certificado:
+- El dominio configurado en `LETS_ENCRYPT_DOMAIN` debe resolver a la direccion publica de este servidor.
+- El servidor debe ser accesible desde Internet por los puertos TCP 80 y 443.
+- Apache debe estar instalado y activo. Si hace falta instalarlo, ejecuta primero `scripts/install_lamp.sh`.
+- El sistema debe tener Snap y `envsubst` disponible. En Ubuntu, `envsubst` se instala con el paquete `gettext-base`.
 
-- `OPENSSL_COUNTRY`
-- `OPENSSL_PROVINCE`
-- `OPENSSL_LOCALITY`
-- `OPENSSL_ORGANIZATION`
-- `OPENSSL_ORGUNIT`
-- `OPENSSL_COMMON_NAME`
-- `OPENSSL_EMAIL`
+## Configuracion y ejecucion
 
-`OPENSSL_COMMON_NAME` debe coincidir con la direccion usada para acceder al servidor. Para esta instancia se configura como `54.82.187.176`. El script añade ese valor al campo `subjectAltName` como tipo IP; si se configura un nombre DNS, lo añade como tipo DNS. Esta extension permite comprobar la identidad del servidor, aunque al ser un certificado autofirmado el navegador seguira mostrando una advertencia de confianza. No publiques valores privados incluidos en `.env`.
+El script `scripts/setup_letsencrypt_certificate.sh` obtiene el certificado y configura Apache. Lee estas variables desde `scripts/.env`:
 
-Desde la raiz del proyecto, ejecuta el script desde su directorio para que encuentre `.env` y las rutas relativas de `conf/`:
+```env
+LETS_ENCRYPT_DOMAIN="practicas.ddns.net"
+LETS_ENCRYPT_EMAIL="tu-correo@example.com"
+```
+
+Sustituye el correo de ejemplo por uno valido y configura el dominio que apunta a este servidor. Desde la raiz del proyecto, ejecuta el script desde `scripts/`, ya que usa rutas relativas para leer `.env` y la plantilla de `conf/`:
 
 ```bash
 cd scripts
-sudo ./setup_selfsigned_certificate.sh
+sudo ./setup_letsencrypt_certificate.sh
 ```
 
-El script realiza estas operaciones:
+El script comprueba que se ejecuta como root y que las dos variables tienen valor. A continuacion instala Certbot mediante Snap, genera un VirtualHost HTTP desde `conf/virtualhost.conf.template`, lo habilita y reinicia Apache. Por ultimo ejecuta Certbot con el complemento de Apache en modo no interactivo, acepta los terminos de servicio y configura la redireccion de HTTP a HTTPS.
 
-1. Lee las variables de `scripts/.env`.
-2. Ejecuta `openssl req` para crear un certificado X.509 autofirmado RSA de 2048 bits, valido durante 365 dias y sin cifrar la clave privada con una frase de paso.
-3. Guarda el certificado en `/etc/ssl/certs/apache-selfsigned.crt` y la clave privada en `/etc/ssl/private/apache-selfsigned.key`.
-4. Copia `conf/default-ssl.conf` a la configuracion de sitios de Apache. Este VirtualHost escucha en el puerto 443, activa `SSLEngine` y referencia el certificado y la clave.
-5. Habilita el sitio `default-ssl.conf` y el modulo `ssl` de Apache.
-6. Copia `conf/000-default.conf`, habilita `rewrite` y configura la redireccion de las peticiones HTTP del puerto 80 a HTTPS.
-7. Reinicia Apache para aplicar los cambios.
+Durante la validacion ACME, Let's Encrypt comprueba que el dominio apunta al servidor y que puede acceder a el. Si la validacion se completa, Certbot configura HTTPS en Apache y guarda los archivos en `/etc/letsencrypt/live/<dominio>/`:
 
-## Comprobacion
+- `fullchain.pem`: certificado del servidor y cadena de certificados intermedios.
+- `privkey.pem`: clave privada asociada al certificado. No la publiques ni la copies al repositorio.
 
-Comprueba que la configuracion sea valida y que Apache este activo:
+La renovacion automatica se gestiona mediante el temporizador de Certbot instalado por Snap.
+
+## Comprobacion y renovacion
+
+Comprueba que Apache tiene una configuracion valida, que el servicio esta activo y que Certbot reconoce el certificado:
 
 ```bash
 sudo apache2ctl configtest
 sudo systemctl status apache2 --no-pager
+sudo certbot certificates
 ```
 
-Tambien puedes consultar el sujeto, emisor y periodo de validez del certificado:
+Comprueba las respuestas HTTP y HTTPS:
 
 ```bash
-sudo openssl x509 -in /etc/ssl/certs/apache-selfsigned.crt -noout -subject -issuer -dates
+curl -I http://practicas.ddns.net/
+curl -I https://practicas.ddns.net/
 ```
 
-Abre `https://54.82.187.176/` en el navegador. Al ser autofirmado, es normal que el navegador solicite confirmar una excepcion de seguridad. Para una prueba desde terminal, `curl -k` permite continuar sin validar la confianza del certificado:
+La peticion HTTP debe redirigir a HTTPS si se habilito esa opcion. Al tratarse de un certificado de una autoridad reconocida, no es necesario usar `curl -k`. Puedes probar el proceso de renovacion sin cambiar el certificado activo:
 
 ```bash
-curl -k -I https://54.82.187.176/
-curl -I http://54.82.187.176/
+sudo certbot renew --dry-run
 ```
-
-La segunda peticion debe responder con una redireccion hacia HTTPS. No uses `-k` como solucion para un servicio publico: en produccion se debe instalar un certificado emitido por una autoridad certificadora de confianza.
 
 ## Evidencias
 
-La primera captura muestra la instalacion de los componentes LAMP y la copia de la aplicacion al directorio web:
+La primera captura muestra la pagina servida por Apache en el dominio configurado:
 
-![Instalacion de Apache, PHP y MySQL](imagenes/Screenshot_20261030_180036.png)
+![Pagina de Apache en practicas.ddns.net](img/Screenshot_20261107_123704.png)
 
-La segunda captura muestra la ejecucion del script de certificado autofirmado y la activacion de SSL y la redireccion en Apache:
+La segunda captura muestra los datos del certificado de `practicas.ddns.net` y su emisor Let's Encrypt:
 
-![Configuracion del certificado autofirmado](imagenes/Screenshot_20261030_180140.png)
-
-La tercera captura comprueba que Apache sirve la pagina de informacion de PHP en la direccion del servidor:
-
-![Comprobacion de PHP en el servidor](imagenes/Screenshot_20261030_180252.png)
-
-La cuarta captura muestra los datos del certificado, incluido el nombre comun y la direccion IP alternativa (`subjectAltName`):
-
-![Datos del certificado autofirmado](imagenes/Screenshot_20261030_180336.png)
+![Certificado de Let's Encrypt para practicas.ddns.net](img/Screenshot_20261107_123812.png)
